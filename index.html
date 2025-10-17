@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <title>📱 Mobile Trading Chart</title>
+    <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html, body { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0d0d0d; color: #d1d4dc; }
+        #app { display: flex; flex-direction: column; width: 100%; height: 100%; }
+        .header { background: #131722; padding: 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #2a2e39; flex-shrink: 0; }
+        .menu-btn { background: #2962ff; color: white; border: none; width: 50px; height: 50px; border-radius: 12px; font-size: 24px; flex-shrink: 0; }
+        .tf-scroll { flex: 1; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .tf-scroll::-webkit-scrollbar { display: none; }
+        .tf-tabs { display: flex; gap: 8px; }
+        .tf-btn { background: #2a2e39; color: #787b86; border: none; padding: 0 20px; height: 46px; border-radius: 10px; font-size: 16px; white-space: nowrap; flex-shrink: 0; font-weight: 600; }
+        .tf-btn.active { background: #2962ff; color: white; }
+        .chart-wrapper { flex: 1; position: relative; min-height: 0; }
+        #chart { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .controls { background: #131722; padding: 14px 12px; border-top: 1px solid #2a2e39; flex-shrink: 0; }
+        .btns { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 16px; }
+        .btn { background: #2962ff; color: white; border: none; height: 54px; border-radius: 12px; font-size: 20px; font-weight: bold; }
+        .btn:disabled { background: #363a45; opacity: 0.5; }
+        .slider-box { margin-bottom: 12px; }
+        .slider { width: 100%; height: 12px; -webkit-appearance: none; background: #2a2e39; border-radius: 6px; }
+        .slider::-webkit-slider-thumb { -webkit-appearance: none; width: 32px; height: 32px; border-radius: 50%; background: #2962ff; box-shadow: 0 2px 10px rgba(41,98,255,0.6); }
+        .slider::-moz-range-thumb { width: 32px; height: 32px; border-radius: 50%; background: #2962ff; border: none; }
+        .slider-label { display: flex; justify-content: space-between; font-size: 13px; color: #787b86; margin-top: 8px; font-weight: 600; }
+        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); z-index: 998; display: none; }
+        .overlay.show { display: block; }
+        .menu { position: fixed; top: 0; left: -100%; width: 90%; max-width: 420px; height: 100%; background: #131722; z-index: 999; transition: left 0.3s cubic-bezier(0.4, 0.0, 0.2, 1); overflow-y: auto; -webkit-overflow-scrolling: touch; }
+        .menu.open { left: 0; }
+        .menu-header { background: #1e222d; padding: 22px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; border-bottom: 3px solid #2962ff; }
+        .menu-title { font-size: 24px; font-weight: 800; color: #2962ff; }
+        .close { background: #ef5350; color: white; border: none; width: 50px; height: 50px; border-radius: 12px; font-size: 26px; font-weight: bold; }
+        .menu-body { padding: 22px; }
+        .sect { color: #2962ff; font-size: 17px; font-weight: 800; margin: 26px 0 16px 0; text-transform: uppercase; letter-spacing: 1px; }
+        .sect:first-child { margin-top: 0; }
+        .upload { background: linear-gradient(135deg, #2962ff 0%, #1e53e5 100%); color: white; border: none; width: 100%; height: 64px; border-radius: 14px; font-size: 18px; font-weight: 800; margin-bottom: 18px; box-shadow: 0 6px 20px rgba(41, 98, 255, 0.4); }
+        .status { padding: 18px; border-radius: 12px; font-size: 15px; margin-bottom: 18px; font-weight: 700; text-align: center; }
+        .status-success { background: linear-gradient(135deg, #26a69a 0%, #1d8378 100%); color: white; }
+        .status-error { background: linear-gradient(135deg, #ef5350 0%, #c62828 100%); color: white; }
+        .status-info { background: linear-gradient(135deg, #2962ff 0%, #1e53e5 100%); color: white; }
+        .info { background: #1e222d; padding: 18px; border-radius: 12px; border-left: 5px solid #2962ff; margin-bottom: 18px; }
+        .info-label { font-size: 12px; color: #787b86; text-transform: uppercase; font-weight: 600; }
+        .info-value { font-size: 18px; color: #d1d4dc; margin-top: 8px; font-weight: 700; }
+        .ind-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+        .ind { background: #1e222d; padding: 18px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; }
+        .ind-name { font-size: 18px; font-weight: 800; }
+        .ind-btns { display: flex; gap: 12px; }
+        .ind-btns button { width: 50px; height: 50px; border: none; border-radius: 12px; font-size: 22px; }
+        .vis { background: #26a69a; color: white; }
+        .vis.off { background: #363a45; }
+        .del { background: #ef5350; color: white; }
+        .add { background: #2a2e39; color: white; border: none; width: 100%; height: 56px; border-radius: 12px; font-size: 16px; font-weight: 800; margin-bottom: 12px; }
+        .chk { display: flex; align-items: center; gap: 16px; padding: 18px; background: #1e222d; border-radius: 12px; margin-bottom: 12px; }
+        .chk input { width: 30px; height: 30px; }
+        .chk label { flex: 1; font-size: 16px; font-weight: 600; }
+        select { width: 100%; height: 56px; background: #2a2e39; border: 1px solid #363a45; border-radius: 12px; color: #d1d4dc; font-size: 16px; padding: 0 18px; font-weight: 700; }
+        .hidden { display: none !important; }
+        .metrics { background: #1e222d; padding: 12px; display: flex; gap: 16px; overflow-x: auto; -webkit-overflow-scrolling: touch; flex-shrink: 0; }
+        .metrics::-webkit-scrollbar { display: none; }
+        .metric { flex-shrink: 0; text-align: center; min-width: 75px; }
+        .m-lab { color: #787b86; font-size: 11px; margin-bottom: 5px; font-weight: 700; }
+        .m-val { color: #d1d4dc; font-size: 15px; font-weight: 800; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="header">
+            <button class="menu-btn" onclick="toggleMenu()">☰</button>
+            <div class="tf-scroll">
+                <div class="tf-tabs">
+                    <button class="tf-btn" data-tf="60" onclick="setTF(60)">1m</button>
+                    <button class="tf-btn" data-tf="300" onclick="setTF(300)">5m</button>
+                    <button class="tf-btn active" data-tf="900" onclick="setTF(900)">15m</button>
+                    <button class="tf-btn" data-tf="3600" onclick="setTF(3600)">1h</button>
+                    <button class="tf-btn" data-tf="14400" onclick="setTF(14400)">4h</button>
+                    <button class="tf-btn" data-tf="86400" onclick="setTF(86400)">1D</button>
+                </div>
+            </div>
+        </div>
+        <div class="metrics">
+            <div class="metric"><div class="m-lab">O</div><div class="m-val" id="mo">-</div></div>
+            <div class="metric"><div class="m-lab">H</div><div class="m-val" id="mh">-</div></div>
+            <div class="metric"><div class="m-lab">L</div><div class="m-val" id="ml">-</div></div>
+            <div class="metric"><div class="m-lab">C</div><div class="m-val" id="mc">-</div></div>
+            <div class="metric"><div class="m-lab">VOL</div><div class="m-val" id="mv">-</div></div>
+            <div class="metric"><div class="m-lab">POS</div><div class="m-val" id="mp">0/0</div></div>
+        </div>
+        <div class="chart-wrapper"><div id="chart"></div></div>
+        <div class="controls">
+            <div class="btns">
+                <button class="btn" onclick="jumpTo('start')" id="bs" disabled>⏮</button>
+                <button class="btn" onclick="jump(-1)" id="bb" disabled>◀</button>
+                <button class="btn" id="bp" onclick="togglePlay()" disabled>▶</button>
+                <button class="btn" onclick="jump(1)" id="bf" disabled>▶</button>
+                <button class="btn" onclick="jumpTo('end')" id="be" disabled>⏭</button>
+            </div>
+            <div class="slider-box">
+                <input type="range" class="slider" id="sld" min="0" max="0" value="0" disabled>
+                <div class="slider-label"><span>POSITION</span><span id="sv">0</span></div>
+            </div>
+        </div>
+    </div>
+    <div class="overlay" id="ov" onclick="toggleMenu()"></div>
+    <div class="menu" id="mn">
+        <div class="menu-header">
+            <div class="menu-title">⚙️ SETTINGS</div>
+            <button class="close" onclick="toggleMenu()">✕</button>
+        </div>
+        <div class="menu-body">
+            <div class="sect">📁 DATA</div>
+            <label for="f" class="upload">📂 UPLOAD CSV</label>
+            <input type="file" id="f" accept=".csv" style="display:none">
+            <div id="st"></div>
+            <div id="inf" class="info hidden">
+                <div class="info-label">Loaded File</div>
+                <div class="info-value" id="fn">-</div>
+                <div class="info-label" style="margin-top:14px">Candles</div>
+                <div class="info-value" id="fc">-</div>
+            </div>
+            <div class="sect">📈 INDICATORS</div>
+            <div class="ind-list" id="il"></div>
+            <button class="add" onclick="addInd('EMA')">+ EMA</button>
+            <button class="add" onclick="addInd('SMA')">+ SMA</button>
+            <div class="sect">🎨 DISPLAY</div>
+            <div class="chk"><input type="checkbox" id="cc" checked onchange="upd()"><label for="cc">Crossovers</label></div>
+            <div class="chk"><input type="checkbox" id="cv" checked onchange="upd()"><label for="cv">Volume</label></div>
+            <div class="chk"><input type="checkbox" id="ca" checked><label for="ca">Audio</label></div>
+            <div class="sect">⚡ SPEED</div>
+            <select id="spd">
+                <option value="0.5">0.5x</option>
+                <option value="1" selected>1x</option>
+                <option value="2">2x</option>
+                <option value="5">5x</option>
+                <option value="10">10x</option>
+            </select>
+        </div>
+    </div>
+    <script>
+        let d=[],r=[],base=900,tf=900,pos=0,play=false,tim=null,ch,can,vol,inds=[],ser=[],ctx=null;
+        function toggleMenu(){document.getElementById('mn').classList.toggle('open');document.getElementById('ov').classList.toggle('show');}
+        function showSt(m,t='info'){document.getElementById('st').innerHTML=`<div class="status status-${t}">${m}</div>`;if(t==='success')setTimeout(()=>document.getElementById('st').innerHTML='',3000);}
+        function initAud(){if(!ctx)ctx=new(window.AudioContext||window.webkitAudioContext)();if(ctx.state==='suspended')ctx.resume();}
+        function playAud(t){if(!document.getElementById('ca').checked)return;initAud();const o=ctx.createOscillator(),g=ctx.createGain();o.connect(g);g.connect(ctx.destination);o.frequency.value=t==='bull'?1200:440;o.type='sine';g.gain.setValueAtTime(0.3,ctx.currentTime);g.gain.exponentialRampToValueAtTime(0.01,ctx.currentTime+0.2);o.start(ctx.currentTime);o.stop(ctx.currentTime+0.2);}
+        function initChart(){const container=document.getElementById('chart');const rect=container.getBoundingClientRect();ch=LightweightCharts.createChart(container,{width:rect.width,height:rect.height,layout:{background:{color:'#0d0d0d'},textColor:'#d1d4dc'},grid:{vertLines:{color:'#2a2e39'},horzLines:{color:'#2a2e39'}},crosshair:{mode:LightweightCharts.CrosshairMode.Normal},rightPriceScale:{borderColor:'#2a2e39'},timeScale:{borderColor:'#2a2e39',timeVisible:true},handleScroll:{vertTouchDrag:false}});can=ch.addCandlestickSeries({upColor:'#26a69a',downColor:'#ef5350',borderUpColor:'#26a69a',borderDownColor:'#ef5350',wickUpColor:'#26a69a',wickDownColor:'#ef5350'});const resizeObserver=new ResizeObserver(entries=>{if(entries.length===0||entries[0].target!==container)return;const newRect=container.getBoundingClientRect();ch.applyOptions({width:newRect.width,height:newRect.height});});resizeObserver.observe(container);}
+        document.getElementById('f').addEventListener('change',(e)=>{const file=e.target.files[0];if(!file)return;showSt('⏳ Loading...','info');Papa.parse(file,{header:true,dynamicTyping:true,skipEmptyLines:true,complete:(res)=>{try{r=res.data.filter(x=>x.timestamp&&x.close).map(x=>({time:Math.floor(new Date(x.timestamp).getTime()/1000),open:+x.open,high:+x.high,low:+x.low,close:+x.close,volume:+x.volume||0}));if(!r.length){showSt('❌ No data','error');return;}base=r.length>1?r[1].time-r[0].time:900;tf=base;d=r;pos=Math.min(100,d.length-1);document.getElementById('sld').max=d.length-1;document.getElementById('sld').value=pos;document.getElementById('inf').classList.remove('hidden');document.getElementById('fn').textContent=file.name;document.getElementById('fc').textContent=`${d.length} bars`;document.querySelectorAll('.tf-btn').forEach(b=>{const t=+b.dataset.tf;b.disabled=t<base;b.classList.toggle('active',t===base);});showSt('✅ SUCCESS!','success');enable(true);upd();setTimeout(toggleMenu,1500);}catch(err){showSt('❌ '+err.message,'error');}}});});
+        function addInd(type){const cols=['#2196F3','#FF6B6B','#4ECDC4','#FFA726'];const pers={SMA:[9,21,50],EMA:[9,21,50]};const cnt=inds.filter(i=>i.type===type).length;inds.push({id:Date.now(),type,period:pers[type][cnt%3],color:cols[inds.length%4],visible:true});renderInds();upd();}
+        function remInd(id){inds=inds.filter(i=>i.id!==id);renderInds();upd();}
+        function togInd(id){const i=inds.find(x=>x.id===id);if(i){i.visible=!i.visible;upd();}}
+        function renderInds(){document.getElementById('il').innerHTML=inds.map(i=>`<div class="ind"><div class="ind-name">${i.type} ${i.period}</div><div class="ind-btns"><button class="vis ${i.visible?'':'off'}" onclick="togInd(${i.id})">${i.visible?'👁':'👁‍🗨'}</button><button class="del" onclick="remInd(${i.id})">×</button></div></div>`).join('');}
+        function calcEMA(data,p){const res=[],k=2/(p+1);let ema=data.slice(0,p).reduce((a,b)=>a+b.close,0)/p;res.push({time:data[p-1].time,value:ema});for(let i=p;i<data.length;i++){ema=data[i].close*k+ema*(1-k);res.push({time:data[i].time,value:ema});}return res;}
+        function calcSMA(data,p){return data.map((c,i)=>{if(i<p-1)return null;return{time:c.time,value:data.slice(i-p+1,i+1).reduce((a,b)=>a+b.close,0)/p};}).filter(Boolean);}
+        function setTF(t){if(t<base)return;tf=t;if(tf===base){d=r;}else{const rat=tf/base;d=[];for(let i=0;i<r.length;i+=rat){const ch=r.slice(i,i+rat);if(!ch.length)continue;d.push({time:ch[0].time,open:ch[0].open,high:Math.max(...ch.map(c=>c.high)),low:Math.min(...ch.map(c=>c.low)),close:ch[ch.length-1].close,volume:ch.reduce((s,c)=>s+c.volume,0)});}}pos=Math.min(100,d.length-1);document.getElementById('sld').max=d.length-1;document.getElementById('sld').value=pos;document.querySelectorAll('.tf-btn').forEach(b=>{b.classList.toggle('active',+b.dataset.tf===tf);});upd();}
+        function upd(){if(!d.length||!ch)return;const dat=d.slice(0,pos+1);can.setData(dat);ser.forEach(s=>ch.removeSeries(s));ser=[];inds.filter(i=>i.visible).forEach(i=>{const fn=i.type==='EMA'?calcEMA:calcSMA;const vals=fn(dat,i.period);if(vals.length){const s=ch.addLineSeries({color:i.color,lineWidth:2});s.setData(vals);ser.push(s);}});if(document.getElementById('cc').checked){const marks=getCross(dat);if(marks.length)can.setMarkers(marks);}if(document.getElementById('cv').checked){if(!vol){vol=ch.addHistogramSeries({priceFormat:{type:'volume'},priceScaleId:'',scaleMargins:{top:0.8,bottom:0}});}vol.setData(dat.map(c=>({time:c.time,value:c.volume,color:c.close>=c.open?'#26a69a44':'#ef535044'})));}else if(vol){ch.removeSeries(vol);vol=null;}updMet();}
+        function getCross(dat){const ems=inds.filter(i=>(i.type==='EMA'||i.type==='SMA')&&i.visible);if(ems.length<2)return[];const marks=[];const fn1=ems[0].type==='EMA'?calcEMA:calcSMA;const fn2=ems[1].type==='EMA'?calcEMA:calcSMA;const d1=fn1(dat,ems[0].period);const d2=fn2(dat,ems[1].period);for(let i=1;i<Math.min(d1.length,d2.length);i++){const p1=d1[i-1]?.value,c1=d1[i]?.value;const p2=d2[i-1]?.value,c2=d2[i]?.value;if(p1&&c1&&p2&&c2){let type=null;if(p1<=p2&&c1>c2)type='bull';else if(p1>=p2&&c1<c2)type='bear';if(type){marks.push({time:d1[i].time,position:'inBar',color:type==='bull'?'#00E676':'#FF5252',shape:'circle',text:'+',size:2});if(i===d1.length-1)playAud(type);}}}return marks;}
+        function updMet(){if(!d.length)return;const c=d[pos];document.getElementById('mo').textContent=c.open.toFixed(2);document.getElementById('mh').textContent=c.high.toFixed(2);document.getElementById('ml').textContent=c.low.toFixed(2);document.getElementById('mc').textContent=c.close.toFixed(2);document.getElementById('mv').textContent=c.volume>1000?(c.volume/1000).toFixed(1)+'K':c.volume;document.getElementById('mp').textContent=`${pos}/${d.length-1}`;document.getElementById('sv').textContent=pos;}
+        function enable(e){['bs','bb','bp','bf','be'].forEach(id=>document.getElementById(id).disabled=!e);document.getElementById('sld').disabled=!e;}
+        function jump(delta){pos=Math.max(0,Math.min(d.length-1,pos+delta));document.getElementById('sld').value=pos;upd();}
+        function jumpTo(p){pos=p==='start'?0:d.length-1;document.getElementById('sld').value=pos;upd();}
+        function togglePlay(){play=!play;document.getElementById('bp').textContent=play?'⏸':'▶';if(play){const s=+document.getElementById('spd').value;tim=setInterval(()=>{if(pos<d.length-1)jump(1);else togglePlay();},1000/s);}else{clearInterval(tim);}}
+        document.getElementById('sld').addEventListener('input',(e)=>{pos=+e.target.value;upd();});
+        window.addEventListener('DOMContentLoaded',()=>{initChart();showSt('📂 Upload CSV to start','info');});
+    </script>
+</body>
+</html>
